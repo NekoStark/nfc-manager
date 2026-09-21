@@ -8,23 +8,26 @@
   <meta name="theme-color" content="#1f4e79">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="vendor/water.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/water.css@2/out/water.min.css">
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
   <header>
     <h1>NFC Tool</h1>
-    <p>Lettura, scrittura e formattazione NDEF di tag NFC.</p>
+    <p>Lettura, scrittura (anche da QR Code) e formattazione NDEF di tag NFC.</p>
   </header>
 
   <nav>
     <button id="btnRead">Leggi</button>
     <button id="btnWrite">Scrivi</button>
+    <button id="btnQr">Scrivi da QR</button>
     <button id="btnFormat">Formatta</button>
+    <button id="btnCancel" hidden>Annulla</button>
     <button id="btnInstall" hidden>Installa app</button>
   </nav>
 
   <p id="status">Pronto.</p>
+  <video id="preview" playsinline muted hidden></video>
   <pre><code id="output"></code></pre>
 
   <script>
@@ -155,6 +158,118 @@
       } catch (err) {
         if (err.name !== "AbortError") setStatus("Errore formattazione: " + err.message);
       }
+    });
+
+    // SCRIVI DA QR CODE
+    const videoEl = document.getElementById("preview");
+    const btnCancel = document.getElementById("btnCancel");
+
+    // Un QR contiene quasi sempre un URL: scritto come record "url" il tag apre
+    // il browser al tocco, cosa che un record "text" non farebbe.
+    function recordForValue(value) {
+      try {
+        const url = new URL(value);
+        if (url.protocol === "http:" || url.protocol === "https:") {
+          return { recordType: "url", data: value };
+        }
+      } catch (e) { /* non è un URL assoluto: lo scriviamo come testo */ }
+      return { recordType: "text", data: value };
+    }
+
+    // Spegne lo stream passato. L'anteprima viene chiusa solo se è ancora
+    // quella di questo stream: una scansione annullata può concludersi dopo
+    // che ne è già partita un'altra, e non deve spegnerle la fotocamera.
+    function stopCamera(stream) {
+      if (stream) stream.getTracks().forEach((track) => track.stop());
+      if (videoEl.srcObject && videoEl.srcObject !== stream) return;
+      videoEl.srcObject = null;
+      videoEl.hidden = true;
+      btnCancel.hidden = true;
+    }
+
+    // Accende la fotocamera e risolve con il contenuto del primo QR inquadrato
+    async function scanQrCode(signal) {
+      const detector = new BarcodeDetector({ formats: ["qr_code"] });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" } }
+      });
+      // L'utente può aver annullato mentre concedeva il permesso
+      if (signal.aborted) {
+        stopCamera(stream);
+        throw new DOMException("Annullato", "AbortError");
+      }
+
+      videoEl.srcObject = stream;
+      videoEl.hidden = false;
+      btnCancel.hidden = false;
+      // play() viene rifiutata con AbortError quando la sorgente del video
+      // cambia: non è un errore di scansione e non deve interromperla. Il ciclo
+      // qui sotto parte comunque e i primi detect() a vuoto vengono ritentati.
+      videoEl.play().catch(() => {});
+      setStatus("Inquadra il QR Code da scrivere sul tag...");
+
+      try {
+        return await new Promise((resolve, reject) => {
+          let done = false;
+          const finish = (settle, arg) => {
+            if (done) return;
+            done = true;
+            signal.removeEventListener("abort", onAbort);
+            settle(arg);
+          };
+          const onAbort = () => finish(reject, new DOMException("Annullato", "AbortError"));
+          signal.addEventListener("abort", onAbort, { once: true });
+
+          // ~10 analisi al secondo: abbastanza reattivo senza scaldare il telefono
+          const tick = async () => {
+            if (done) return;
+            try {
+              const [code] = await detector.detect(videoEl);
+              if (code && code.rawValue) return finish(resolve, code.rawValue);
+            } catch (e) { /* frame non analizzabile: si riprova al giro dopo */ }
+            if (!done) setTimeout(tick, 100);
+          };
+          tick();
+        });
+      } finally {
+        stopCamera(stream);
+      }
+    }
+
+    document.getElementById("btnQr").addEventListener("click", async () => {
+      if (!checkSupport()) return;
+      if (!("BarcodeDetector" in window)) {
+        setStatus("Scansione QR non supportata da questo browser. Serve Chrome su Android.");
+        return;
+      }
+      const signal = newOperation();
+      setOutput("");
+
+      let value;
+      try {
+        value = await scanQrCode(signal);
+      } catch (err) {
+        if (err.name === "NotAllowedError") setStatus("Permesso fotocamera negato.");
+        else if (err.name === "NotFoundError") setStatus("Nessuna fotocamera disponibile.");
+        else if (err.name !== "AbortError") setStatus("Errore fotocamera: " + err.message);
+        return;
+      }
+
+      setOutput(value);
+      try {
+        const record = recordForValue(value);
+        const ndef = new NDEFReader();
+        setStatus(`QR letto (record ${record.recordType}). In attesa del tag su cui scrivere...`);
+        await ndef.write({ records: [record] }, { signal, overwrite: true });
+        setStatus("Scritto dal QR: \"" + value + "\"");
+      } catch (err) {
+        if (err.name !== "AbortError") setStatus("Errore scrittura: " + err.message);
+      }
+    });
+
+    btnCancel.addEventListener("click", () => {
+      if (controller) controller.abort();
+      setStatus("Operazione annullata.");
     });
 
     // PWA: registrazione service worker

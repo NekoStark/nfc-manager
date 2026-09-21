@@ -1,7 +1,7 @@
 {
   "name": "NFC Tool",
   "short_name": "NFC Tool",
-  "description": "Lettura, scrittura e formattazione NDEF di tag NFC",
+  "description": "Lettura, scrittura (anche da QR Code) e formattazione NDEF di tag NFC",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

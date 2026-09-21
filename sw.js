@@ -1,5 +1,5 @@
 // Incrementa la versione quando modifichi i file, così la cache viene rinnovata
-const CACHE_NAME = "nfc-tool-v2";
+const CACHE_NAME = "nfc-tool-v3";
 
 const APP_SHELL = [
   "./",
@@ -12,10 +12,14 @@ const APP_SHELL = [
 ];
 
 self.addEventListener("install", (event) => {
+  // skipWaiting solo a shell copiata: attivarsi prima significherebbe servire
+  // una cache ancora incompleta
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL))
+    caches
+      .open(CACHE_NAME)
+      .then((cache) => cache.addAll(APP_SHELL))
+      .then(() => self.skipWaiting())
   );
-  self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
@@ -41,12 +45,18 @@ self.addEventListener("fetch", (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put("./index.html", copy));
           return res;
         })
-        .catch(() => caches.match("./index.html"))
+        .catch(() => caches.open(CACHE_NAME).then((cache) => cache.match("./index.html")))
     );
     return;
   }
 
+  // La ricerca è limitata alla cache di questa versione: caches.match() senza
+  // nome guarda in tutte le cache e, finché la vecchia non è stata cancellata,
+  // restituirebbe i file della versione precedente.
   event.respondWith(
-    caches.match(req).then((cached) => cached || fetch(req))
+    caches
+      .open(CACHE_NAME)
+      .then((cache) => cache.match(req))
+      .then((cached) => cached || fetch(req))
   );
 });

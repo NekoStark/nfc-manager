@@ -6,9 +6,21 @@ PWA per lettura, scrittura e formattazione NDEF di tag NFC, basata sulla Web NFC
 
 App online: https://nekostark.github.io/nfc-manager/
 
+| Comando | Cosa fa |
+| --- | --- |
+| Leggi | Legge il messaggio NDEF del primo tag avvicinato |
+| Scrivi | Chiede un testo e lo scrive sul tag |
+| Scrivi da QR | Accende la fotocamera: il contenuto del QR inquadrato viene scritto sul tag |
+| Formatta | Formatta il tag in NDEF cancellandone il contenuto |
+
+In "Scrivi da QR" un QR che contiene un URL `http`/`https` viene scritto come
+record NDEF `url`, così toccando il tag il telefono apre direttamente il link;
+qualsiasi altro contenuto diventa un record `text`.
+
 Requisiti: Chrome/Edge su Android con NFC attivo. La Web NFC API non è disponibile
 su iOS né sui browser desktop, e richiede un contesto sicuro (HTTPS), garantito da
-GitHub Pages.
+GitHub Pages. La scansione QR usa l'API `BarcodeDetector` del browser (nessuna
+libreria, niente da scaricare) e richiede il permesso di accesso alla fotocamera.
 
 L'app è installabile (Aggiungi a schermata Home) e funziona offline grazie al
 service worker.

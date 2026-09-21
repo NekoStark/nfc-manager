@@ -1,0 +1,78 @@
+/* Personalizzazioni sopra water.css: solo selettori di elemento e gli id
+   già usati dal JS, così il markup resta senza classi. */
+
+:root {
+  /* Accento allineato al theme_color del manifest */
+  --links: #1f4e79;
+  --focus: rgba(31, 78, 121, 0.4);
+  --button-base: #1f4e79;
+  --button-hover: #16395a;
+  --button-text: #fff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --links: #6fb3ef;
+    --focus: rgba(111, 179, 239, 0.4);
+    --button-base: #2c6595;
+    --button-hover: #3a7ab2;
+    /* water.css colora il testo di <code> in arancione: qui l'output è un
+       dump tecnico, non codice sorgente, quindi resta colore di testo normale */
+    --code: var(--text-main);
+  }
+}
+
+body {
+  max-width: 44rem;
+}
+
+header h1 {
+  margin-bottom: 0.25rem;
+}
+
+header p {
+  margin-top: 0;
+  color: var(--text-muted);
+}
+
+/* Barra dei comandi: su schermo stretto i bottoni si dispongono su più righe
+   e riempiono la larghezza disponibile */
+nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1.5rem 0;
+}
+
+nav button {
+  flex: 1 1 8rem;
+  margin: 0;
+  padding-right: 1rem;
+  padding-left: 1rem;
+  color: var(--button-text);
+  font-weight: 600;
+}
+
+/* L'attributo hidden deve vincere sul layout flex */
+[hidden] {
+  display: none !important;
+}
+
+#status {
+  padding: 0.75rem 1rem;
+  border-left: 4px solid var(--links);
+  border-radius: 0 6px 6px 0;
+  background: var(--background-alt);
+}
+
+/* Blocco di output: nascosto finché è vuoto, e a capo automatico per non
+   forzare lo scorrimento orizzontale sul telefono */
+pre:has(> code:empty) {
+  display: none;
+}
+
+pre > code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}

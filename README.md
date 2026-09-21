@@ -25,6 +25,14 @@ Poi apri http://localhost:8000 — `localhost` è considerato contesto sicuro.
 
 Dopo una modifica ai file, incrementa `CACHE_NAME` in `sw.js` per invalidare la cache.
 
+## Stile
+
+L'interfaccia usa [water.css](https://github.com/kognise/water.css) v2.1.1 (MIT),
+un foglio di stile *classless*: dà forma all'HTML semantico senza bisogno di
+classi nel markup. È incluso nel repository (`vendor/`) invece che da CDN, così
+l'app resta utilizzabile offline. `app.css` contiene solo gli scostamenti:
+colori allineati al tema, barra dei comandi e blocco di output.
+
 ## Deploy
 
 Ogni push su `main` pubblica automaticamente la root del repository su GitHub Pages

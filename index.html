@@ -8,17 +8,24 @@
   <meta name="theme-color" content="#1f4e79">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="vendor/water.min.css">
+  <link rel="stylesheet" href="app.css">
 </head>
 <body>
-  <h1>NFC Tool</h1>
+  <header>
+    <h1>NFC Tool</h1>
+    <p>Lettura, scrittura e formattazione NDEF di tag NFC.</p>
+  </header>
 
-  <button id="btnRead">Leggi</button>
-  <button id="btnWrite">Scrivi</button>
-  <button id="btnFormat">Formatta</button>
-  <button id="btnInstall" hidden>Installa app</button>
+  <nav>
+    <button id="btnRead">Leggi</button>
+    <button id="btnWrite">Scrivi</button>
+    <button id="btnFormat">Formatta</button>
+    <button id="btnInstall" hidden>Installa app</button>
+  </nav>
 
   <p id="status">Pronto.</p>
-  <pre id="output"></pre>
+  <pre><code id="output"></code></pre>
 
   <script>
     const statusEl = document.getElementById("status");

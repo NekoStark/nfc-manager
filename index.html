@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NFC Tool</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#1f4e79">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+</head>
+<body>
+  <h1>NFC Tool</h1>
+
+  <button id="btnRead">Leggi</button>
+  <button id="btnWrite">Scrivi</button>
+  <button id="btnFormat">Formatta</button>
+  <button id="btnInstall" hidden>Installa app</button>
+
+  <p id="status">Pronto.</p>
+  <pre id="output"></pre>
+
+  <script>
+    const statusEl = document.getElementById("status");
+    const outputEl = document.getElementById("output");
+    let controller = null;
+
+    function setStatus(msg) { statusEl.textContent = msg; }
+    function setOutput(msg) { outputEl.textContent = msg; }
+
+    // Annulla l'operazione in corso (se c'è) e ne prepara una nuova
+    function newOperation() {
+      if (controller) controller.abort();
+      controller = new AbortController();
+      return controller.signal;
+    }
+
+    function checkSupport() {
+      if (!("NDEFReader" in window)) {
+        setStatus("Web NFC non supportato. Serve Chrome su Android, in HTTPS (o localhost).");
+        return false;
+      }
+      return true;
+    }
+
+    function toHex(dataView) {
+      const bytes = [];
+      for (let i = 0; i < dataView.byteLength; i++) {
+        bytes.push(dataView.getUint8(i).toString(16).padStart(2, "0"));
+      }
+      return bytes.join(":");
+    }
+
+    function decodeData(record) {
+      if (!record.data) return "(nessun dato)";
+      switch (record.recordType) {
+        case "text":
+          return new TextDecoder(record.encoding || "utf-8").decode(record.data);
+        case "url":
+        case "absolute-url":
+          return new TextDecoder().decode(record.data);
+        case "mime":
+          if (record.mediaType && (record.mediaType.startsWith("text/") || record.mediaType === "application/json")) {
+            return new TextDecoder().decode(record.data);
+          }
+          return "hex: " + toHex(record.data);
+        default:
+          return "hex: " + toHex(record.data);
+      }
+    }
+
+    function describeRecord(record, index, indent = "") {
+      let out = `${indent}Record #${index}\n`;
+      out += `${indent}  recordType: ${record.recordType}\n`;
+      out += `${indent}  mediaType:  ${record.mediaType ?? "-"}\n`;
+      out += `${indent}  id:         ${record.id ?? "-"}\n`;
+      out += `${indent}  encoding:   ${record.encoding ?? "-"}\n`;
+      out += `${indent}  lang:       ${record.lang ?? "-"}\n`;
+      out += `${indent}  data:       ${decodeData(record)}\n`;
+      // Record annidati (es. smart-poster o record esterni)
+      try {
+        const nested = record.toRecords ? record.toRecords() : null;
+        if (nested && nested.length) {
+          out += `${indent}  record annidati:\n`;
+          nested.forEach((r, i) => { out += describeRecord(r, i, indent + "    "); });
+        }
+      } catch (e) { /* il record non contiene un messaggio NDEF annidato */ }
+      return out;
+    }
+
+    // LEGGI
+    document.getElementById("btnRead").addEventListener("click", async () => {
+      if (!checkSupport()) return;
+      const signal = newOperation();
+      setOutput("");
+      try {
+        const ndef = new NDEFReader();
+        await ndef.scan({ signal });
+        setStatus("In attesa del tag da leggere...");
+
+        ndef.onreadingerror = () => {
+          setStatus("Tag rilevato ma non leggibile (forse non è formattato NDEF).");
+        };
+
+        ndef.onreading = (event) => {
+          const { serialNumber, message } = event;
+          let out = `Serial number: ${serialNumber || "-"}\n`;
+          out += `Numero record: ${message.records.length}\n\n`;
+          message.records.forEach((r, i) => { out += describeRecord(r, i) + "\n"; });
+          setOutput(out);
+          setStatus("Tag letto.");
+          controller.abort(); // una lettura e basta
+        };
+      } catch (err) {
+        if (err.name !== "AbortError") setStatus("Errore lettura: " + err.message);
+      }
+    });
+
+    // SCRIVI
+    document.getElementById("btnWrite").addEventListener("click", async () => {
+      if (!checkSupport()) return;
+      const text = prompt("Cosa vuoi scrivere sul tag?");
+      if (text === null) return;
+      const signal = newOperation();
+      setOutput("");
+      try {
+        const ndef = new NDEFReader();
+        setStatus("In attesa del tag su cui scrivere...");
+        await ndef.write({ records: [{ recordType: "text", data: text }] }, { signal, overwrite: true });
+        setStatus("Scritto: \"" + text + "\"");
+      } catch (err) {
+        if (err.name !== "AbortError") setStatus("Errore scrittura: " + err.message);
+      }
+    });
+
+    // FORMATTA
+    document.getElementById("btnFormat").addEventListener("click", async () => {
+      if (!checkSupport()) return;
+      const signal = newOperation();
+      setOutput("");
+      try {
+        const ndef = new NDEFReader();
+        setStatus("In attesa del tag da formattare...");
+        // Scrivere un messaggio con un record "empty" formatta il tag in NDEF
+        // (se non lo è già) e ne cancella il contenuto.
+        await ndef.write({ records: [{ recordType: "empty" }] }, { signal, overwrite: true });
+        setStatus("Tag formattato NDEF (messaggio vuoto).");
+      } catch (err) {
+        if (err.name !== "AbortError") setStatus("Errore formattazione: " + err.message);
+      }
+    });
+
+    // PWA: registrazione service worker
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("sw.js").catch((err) => {
+          console.warn("Service worker non registrato:", err);
+        });
+      });
+    }
+
+    // PWA: bottone "Installa" mostrato solo quando il browser lo consente
+    const btnInstall = document.getElementById("btnInstall");
+    let deferredPrompt = null;
+    window.addEventListener("beforeinstallprompt", (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      btnInstall.hidden = false;
+    });
+    btnInstall.addEventListener("click", async () => {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      deferredPrompt = null;
+      btnInstall.hidden = true;
+    });
+    window.addEventListener("appinstalled", () => { btnInstall.hidden = true; });
+  </script>
+</body>
+</html>

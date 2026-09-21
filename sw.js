@@ -1,10 +1,9 @@
 // Incrementa la versione quando modifichi i file, così la cache viene rinnovata
-const CACHE_NAME = "nfc-tool-v3";
+const CACHE_NAME = "nfc-tool-v4";
 
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./vendor/water.min.css",
   "./app.css",
   "./manifest.webmanifest",
   "./icons/icon-192.png",

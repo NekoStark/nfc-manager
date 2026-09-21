@@ -41,9 +41,19 @@ Dopo una modifica ai file, incrementa `CACHE_NAME` in `sw.js` per invalidare la 
 
 L'interfaccia usa [water.css](https://github.com/kognise/water.css) v2.1.1 (MIT),
 un foglio di stile *classless*: dà forma all'HTML semantico senza bisogno di
-classi nel markup. È incluso nel repository (`vendor/`) invece che da CDN, così
-l'app resta utilizzabile offline. `app.css` contiene solo gli scostamenti:
-colori allineati al tema, barra dei comandi e blocco di output.
+classi nel markup.
+
+`app.css` è l'unico foglio di stile del progetto: contiene water.css seguito
+dalle personalizzazioni di questa app (colori allineati al tema, barra dei
+comandi, anteprima della fotocamera, blocco di output). Il separatore a metà
+file segna il confine fra le due parti.
+
+Non è caricato da CDN di proposito: un foglio esterno non entrerebbe nella cache
+del service worker e offline l'app si aprirebbe senza stili.
+
+Per aggiornare water.css: sostituisci la parte prima del separatore con il
+contenuto di `https://cdn.jsdelivr.net/npm/water.css@2/out/water.min.css`,
+tenendo l'intestazione con la licenza MIT, e incrementa `CACHE_NAME` in `sw.js`.
 
 ## Deploy
 

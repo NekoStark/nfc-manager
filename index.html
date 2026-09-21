@@ -20,6 +20,7 @@
     <button id="btnRead">Leggi</button>
     <button id="btnWrite">Scrivi</button>
     <button id="btnQr">Scrivi da QR</button>
+    <button id="btnQrWrite" hidden>Scrivi sul tag</button>
     <button id="btnFormat">Formatta</button>
     <button id="btnCancel" hidden>Annulla</button>
     <button id="btnInstall" hidden>Installa app</button>
@@ -37,11 +38,28 @@
     function setStatus(msg) { statusEl.textContent = msg; }
     function setOutput(msg) { outputEl.textContent = msg; }
 
+    // Motivo con cui annulliamo noi: serve a distinguere i nostri abort da
+    // quelli che arrivano dal browser, che invece vanno segnalati all'utente.
+    const ABORT_INTERNO = "operazione-sostituita";
+
     // Annulla l'operazione in corso (se c'è) e ne prepara una nuova
     function newOperation() {
-      if (controller) controller.abort();
+      if (controller) controller.abort(ABORT_INTERNO);
       controller = new AbortController();
+      resetQr();
       return controller.signal;
+    }
+
+    // Un AbortError chiesto da noi (Annulla, o un altro comando che prende il
+    // posto di questo) è già stato comunicato da chi l'ha chiesto. Se invece
+    // arriva dal browser va detto: altrimenti resta scritto "in attesa del
+    // tag" mentre l'app non sta più ascoltando, e il tag lo intercetta Android.
+    function reportError(prefisso, err, signal) {
+      if (err.name !== "AbortError") {
+        setStatus(prefisso + err.message);
+      } else if (signal.reason !== ABORT_INTERNO) {
+        setStatus("Operazione interrotta dal browser. Riprova tenendo l'app in primo piano.");
+      }
     }
 
     function checkSupport() {
@@ -118,10 +136,10 @@
           message.records.forEach((r, i) => { out += describeRecord(r, i) + "\n"; });
           setOutput(out);
           setStatus("Tag letto.");
-          controller.abort(); // una lettura e basta
+          controller.abort(ABORT_INTERNO); // una lettura e basta
         };
       } catch (err) {
-        if (err.name !== "AbortError") setStatus("Errore lettura: " + err.message);
+        reportError("Errore lettura: ", err, signal);
       }
     });
 
@@ -138,7 +156,7 @@
         await ndef.write({ records: [{ recordType: "text", data: text }] }, { signal, overwrite: true });
         setStatus("Scritto: \"" + text + "\"");
       } catch (err) {
-        if (err.name !== "AbortError") setStatus("Errore scrittura: " + err.message);
+        reportError("Errore scrittura: ", err, signal);
       }
     });
 
@@ -155,13 +173,23 @@
         await ndef.write({ records: [{ recordType: "empty" }] }, { signal, overwrite: true });
         setStatus("Tag formattato NDEF (messaggio vuoto).");
       } catch (err) {
-        if (err.name !== "AbortError") setStatus("Errore formattazione: " + err.message);
+        reportError("Errore formattazione: ", err, signal);
       }
     });
 
     // SCRIVI DA QR CODE
     const videoEl = document.getElementById("preview");
     const btnCancel = document.getElementById("btnCancel");
+    const btnQrWrite = document.getElementById("btnQrWrite");
+    let valoreDalQr = null;
+
+    // Dimentica il valore letto e nasconde la conferma. La chiama
+    // newOperation(), così qualunque altro comando fa sparire una conferma
+    // rimasta in sospeso.
+    function resetQr() {
+      valoreDalQr = null;
+      btnQrWrite.hidden = true;
+    }
 
     // Un QR contiene quasi sempre un URL: scritto come record "url" il tag apre
     // il browser al tocco, cosa che un record "text" non farebbe.
@@ -250,24 +278,39 @@
       } catch (err) {
         if (err.name === "NotAllowedError") setStatus("Permesso fotocamera negato.");
         else if (err.name === "NotFoundError") setStatus("Nessuna fotocamera disponibile.");
-        else if (err.name !== "AbortError") setStatus("Errore fotocamera: " + err.message);
+        else reportError("Errore fotocamera: ", err, signal);
         return;
       }
 
       setOutput(value);
+      valoreDalQr = value;
+      btnQrWrite.hidden = false;
+      setStatus(`QR letto (record ${recordForValue(value).recordType}). Tocca "Scrivi sul tag", poi avvicina il tag.`);
+    });
+
+    // La scrittura parte da un tocco e non dalla fine della scansione: Chrome
+    // arma l'NFC per un'operazione che nasce da un gesto dell'utente, e i
+    // secondi passati a inquadrare il QR consumano quello del tocco iniziale.
+    // Senza questo passaggio la write() resta appesa, il tag lo intercetta
+    // Android e l'app sembra in attesa senza esserlo.
+    btnQrWrite.addEventListener("click", async () => {
+      const value = valoreDalQr;
+      if (value === null) return;
+      const signal = newOperation();   // azzera anche valoreDalQr e la conferma
       try {
         const record = recordForValue(value);
         const ndef = new NDEFReader();
-        setStatus(`QR letto (record ${record.recordType}). In attesa del tag su cui scrivere...`);
+        setStatus("In attesa del tag su cui scrivere...");
         await ndef.write({ records: [record] }, { signal, overwrite: true });
         setStatus("Scritto dal QR: \"" + value + "\"");
       } catch (err) {
-        if (err.name !== "AbortError") setStatus("Errore scrittura: " + err.message);
+        reportError("Errore scrittura: ", err, signal);
       }
     });
 
     btnCancel.addEventListener("click", () => {
-      if (controller) controller.abort();
+      if (controller) controller.abort(ABORT_INTERNO);
+      resetQr();
       setStatus("Operazione annullata.");
     });
 

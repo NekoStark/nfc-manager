@@ -10,12 +10,20 @@ App online: https://nekostark.github.io/nfc-manager/
 | --- | --- |
 | Leggi | Legge il messaggio NDEF del primo tag avvicinato |
 | Scrivi | Chiede un testo e lo scrive sul tag |
-| Scrivi da QR | Accende la fotocamera: il contenuto del QR inquadrato viene scritto sul tag |
+| Scrivi da QR | Accende la fotocamera e legge un QR; il valore appare a schermo |
+| Scrivi sul tag | Compare dopo la lettura del QR: scrive quel valore sul tag |
 | Formatta | Formatta il tag in NDEF cancellandone il contenuto |
 
 In "Scrivi da QR" un QR che contiene un URL `http`/`https` viene scritto come
 record NDEF `url`, così toccando il tag il telefono apre direttamente il link;
 qualsiasi altro contenuto diventa un record `text`.
+
+La scrittura è divisa in due tocchi di proposito. Chrome arma il lettore NFC
+per un'operazione che nasce da un gesto dell'utente, e i secondi passati a
+inquadrare il QR consumano quello del tocco iniziale: se la scrittura partisse
+da sola alla fine della scansione resterebbe appesa, il tag verrebbe
+intercettato da Android e l'app sembrerebbe in attesa senza esserlo. Il secondo
+tocco fa anche vedere cosa si sta per scrivere prima di sovrascrivere il tag.
 
 Requisiti: Chrome/Edge su Android con NFC attivo. La Web NFC API non è disponibile
 su iOS né sui browser desktop, e richiede un contesto sicuro (HTTPS), garantito da
